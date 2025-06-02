@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestión de Tickets - Exportación de Café S.A. de C.V.</title>
+
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- FontAwesome 6 -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/11.8.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.8.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore-compat.js"></script>
+
+  <style>
+    body {
+      background-color: #f4f1ed;
+      color: #4e342e;
+    }
+    .bg-coffee {
+      background-color: #6f4e37;
+      color: white;
+    }
+    .ticket-card {
+      border-left: 5px solid #6f4e37;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container py-5">
+    <h1 class="text-center mb-4">Gestión de Tickets - Exportación de Café S.A. de C.V.</h1>
+
+    <!-- Auth Section -->
+    <div id="auth-section" class="mb-5">
+      <div class="card p-4">
+        <div class="mb-3">
+          <label for="email" class="form-label">Correo Electrónico</label>
+          <input type="email" class="form-control" id="email">
+        </div>
+        <div class="mb-3">
+          <label for="password" class="form-label">Contraseña</label>
+          <input type="password" class="form-control" id="password">
+        </div>
+        <button class="btn btn-success" id="btn-login"><i class="fas fa-sign-in-alt"></i> Iniciar Sesión</button>
+        <button class="btn btn-primary" id="btn-register"><i class="fas fa-user-plus"></i> Registrarse</button>
+        <button class="btn btn-warning" id="btn-reset"><i class="fas fa-unlock"></i> Recuperar Contraseña</button>
+      </div>
+    </div>
+
+    <!-- Main App Section -->
+    <div id="app-section" style="display:none">
+      <button class="btn btn-danger mb-3" id="btn-logout"><i class="fas fa-sign-out-alt"></i> Cerrar Sesión</button>
+
+      <!-- Ticket Form -->
+      <div class="card mb-4 p-4">
+        <h4>Crear Nuevo Ticket</h4>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <input class="form-control" id="titulo" placeholder="Título del Pedido">
+          </div>
+          <div class="col-md-6">
+            <input class="form-control" id="cliente" placeholder="Nombre del Cliente">
+          </div>
+          <div class="col-md-12">
+            <textarea class="form-control" id="descripcion" placeholder="Descripción del Pedido"></textarea>
+          </div>
+          <div class="col-md-3">
+            <select class="form-select" id="prioridad">
+              <option value="Alta">Alta</option>
+              <option value="Media">Media</option>
+              <option value="Baja">Baja</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <select class="form-select" id="estado">
+              <option value="Abierto">Abierto</option>
+              <option value="Cerrado">Cerrado</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <input type="number" class="form-control" id="kilogramos" placeholder="Kg de Café">
+          </div>
+          <div class="col-md-3">
+            <input class="form-control" id="tipo" placeholder="Tipo de Producto">
+          </div>
+          <div class="col-md-12">
+            <input class="form-control" id="pais" placeholder="País de Envío">
+          </div>
+        </div>
+        <button class="btn btn-success mt-3" id="btn-crear"><i class="fas fa-plus"></i> Crear Ticket</button>
+      </div>
+
+      <!-- Export & Chart -->
+      <div class="d-flex justify-content-between mb-3">
+        <button class="btn btn-secondary" id="btn-exportar"><i class="fas fa-file-export"></i> Exportar Tickets</button>
+      </div>
+      <canvas id="graficaPrioridades" class="mb-4"></canvas>
+
+      <!-- Ticket List -->
+      <div id="ticket-list" class="row g-3"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-auth.js";
+    import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyD4lBVTlxNJC6UzKsbd2ZUOwi6_HeuNB2U",
+      authDomain: "ejercicio2-92844.firebaseapp.com",
+      projectId: "ejercicio2-92844",
+      storageBucket: "ejercicio2-92844.firebasestorage.app",
+      messagingSenderId: "435999544100",
+      appId: "1:435999544100:web:c2b865087212effdb4d9b1"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth();
+    const db = getFirestore(app);
+
+    let folioCounter = 0;
+
+    const login = () => {
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+      signInWithEmailAndPassword(auth, email, password).catch(err => alert(err.message));
+    };
+
+    const register = () => {
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+      createUserWithEmailAndPassword(auth, email, password).catch(err => alert(err.message));
+    };
+
+    const resetPassword = () => {
+      const email = document.getElementById("email").value;
+      sendPasswordResetEmail(auth, email).then(() => alert("Correo de recuperación enviado.")).catch(err => alert(err.message));
+    };
+
+    const logout = () => signOut(auth);
+
+    onAuthStateChanged(auth, user => {
+      document.getElementById("auth-section").style.display = user ? "none" : "block";
+      document.getElementById("app-section").style.display = user ? "block" : "none";
+      if (user) cargarTickets();
+    });
+
+    const crearTicket = async () => {
+      folioCounter++;
+      const folio = `COFFEE-${String(folioCounter).padStart(3, '0')}`;
+      const data = {
+        titulo: document.getElementById("titulo").value,
+        descripcion: document.getElementById("descripcion").value,
+        prioridad: document.getElementById("prioridad").value,
+        estado: document.getElementById("estado").value,
+        cliente: document.getElementById("cliente").value,
+        kilogramos: document.getElementById("kilogramos").value,
+        tipo: document.getElementById("tipo").value,
+        pais: document.getElementById("pais").value,
+        folio
+      };
+      await addDoc(collection(db, "tickets"), data);
+    };
+
+    const cargarTickets = () => {
+      const ticketList = document.getElementById("ticket-list");
+      onSnapshot(collection(db, "tickets"), (snapshot) => {
+        ticketList.innerHTML = "";
+        const prioridades = { Alta: 0, Media: 0, Baja: 0 };
+        snapshot.forEach(docSnap => {
+          const t = docSnap.data();
+          const card = document.createElement("div");
+          card.className = "col-md-4";
+          card.innerHTML = `
+            <div class="card ticket-card p-3">
+              <h5>${t.folio} - ${t.titulo}</h5>
+              <p><strong>Cliente:</strong> ${t.cliente}</p>
+              <p><strong>Prioridad:</strong> ${t.prioridad}</p>
+              <p><strong>Estado:</strong> ${t.estado}</p>
+              <p><strong>Tipo:</strong> ${t.tipo}</p>
+              <button class="btn btn-sm btn-danger" onclick="eliminarTicket('${docSnap.id}')">Eliminar</button>
+            </div>`;
+          ticketList.appendChild(card);
+          prioridades[t.prioridad]++;
+        });
+        actualizarGrafica(prioridades);
+      });
+    };
+
+    window.eliminarTicket = async (id) => {
+      await deleteDoc(doc(db, "tickets", id));
+    };
+
+    const exportarCSV = () => {
+      getDocs(collection(db, "tickets")).then(snapshot => {
+        let csv = "Folio,Título,Cliente,Prioridad,Estado,Kilogramos,Tipo,País\n";
+        snapshot.forEach(doc => {
+          const t = doc.data();
+          csv += `${t.folio},${t.titulo},${t.cliente},${t.prioridad},${t.estado},${t.kilogramos},${t.tipo},${t.pais}\n`;
+        });
+        const blob = new Blob([csv], { type: "text/csv" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "tickets.csv";
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+    };
+
+    let grafico;
+    const actualizarGrafica = (data) => {
+      const ctx = document.getElementById("graficaPrioridades").getContext("2d");
+      if (grafico) grafico.destroy();
+      grafico = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: Object.keys(data),
+          datasets: [{
+            label: 'Cantidad de Tickets',
+            data: Object.values(data),
+            backgroundColor: ['#d32f2f', '#fbc02d', '#388e3c']
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false },
+            title: { display: true, text: 'Tickets por Prioridad' }
+          }
+        }
+      });
+    };
+
+    document.getElementById("btn-login").addEventListener("click", login);
+    document.getElementById("btn-register").addEventListener("click", register);
+    document.getElementById("btn-reset").addEventListener("click", resetPassword);
+    document.getElementById("btn-logout").addEventListener("click", logout);
+    document.getElementById("btn-crear").addEventListener("click", crearTicket);
+    document.getElementById("btn-exportar").addEventListener("click", exportarCSV);
+  </script>
+</body>
+</html>
